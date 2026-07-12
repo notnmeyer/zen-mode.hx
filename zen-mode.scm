@@ -26,6 +26,11 @@
 (define *zen-width* 0.65)
 ;; whether to hide the gutters while zen is on
 (define *zen-hide-gutters* #t)
+;; whether to blank the statusline while zen is on. the statusline row can't be
+;; removed (it's structural), so this empties its content — you get a bare bar in
+;; the statusline theme color, not a hidden row. off by default: a functional
+;; statusline is usually worth the one row.
+(define *zen-blank-statusline* #f)
 ;; how often (ms) to poll for terminal resizes while zen is on, so centering
 ;; follows a window resize without waiting for a keypress. 0 disables polling
 ;; (resizes then only re-center on the next command).
@@ -57,6 +62,9 @@
 (define *zen-pending-total* #f)
 ;; original gutter layout, captured on toggle-on so we can restore it
 (define *zen-saved-gutters* #f)
+;; original statusline element lists (left . (center . right)), captured on
+;; toggle-on so we can restore them when blanking is enabled
+(define *zen-saved-statusline* #f)
 
 ;; --- helpers ----------------------------------------------------------------
 
@@ -126,11 +134,17 @@
 ;; default (3) — restoring it would need an int through the same setter the float
 ;; round-trip rules out.
 ;;
-;; The statusline is intentionally left alone. It's a structural row that can't
-;; be removed via the clip or config API — blanking its content just leaves an
-;; empty bar, and recoloring it to blend in isn't possible cleanly (the Steel
-;; theme API can't restore the original theme and corrupts other scopes). So we
-;; keep it fully functional in zen mode.
+;; The statusline can't be removed — it's a structural row (the view reserves it
+;; via clip_bottom(1)) with no config toggle, and it's always painted in the
+;; ui.statusline theme style. The most we can do is empty its content, leaving a
+;; bare bar in that color. *zen-blank-statusline* opts into that; off by default,
+;; the statusline stays functional. We can't recolor it to blend into the theme
+;; background: the Steel theme API can't restore the original theme afterward and
+;; corrupts other scopes.
+;;
+;; Blanking saves and clears the three element lists (left/center/right). These
+;; round-trip fine — StatusLineElement is a kebab-case string enum, same shape as
+;; the gutter layout array.
 
 (define (zen-hide-gutters!)
   (let ([g (get-config-option-value "gutters")])
@@ -143,6 +157,25 @@
   ;; restore gutters from the saved layout list (falls back to nothing if unset)
   (when (list? *zen-saved-gutters*)
     (set-option! "gutters" *zen-saved-gutters*))
+  (update-configuration!))
+
+(define (zen-hide-statusline!)
+  ;; save all three element lists, then empty them
+  (set! *zen-saved-statusline*
+        (list (get-config-option-value "statusline.left")
+              (get-config-option-value "statusline.center")
+              (get-config-option-value "statusline.right")))
+  (set-option! "statusline.left" '())
+  (set-option! "statusline.center" '())
+  (set-option! "statusline.right" '())
+  (update-configuration!))
+
+(define (zen-restore-statusline!)
+  ;; restore the three lists from the saved triple (falls back to nothing if unset)
+  (when (list? *zen-saved-statusline*)
+    (set-option! "statusline.left" (list-ref *zen-saved-statusline* 0))
+    (set-option! "statusline.center" (list-ref *zen-saved-statusline* 1))
+    (set-option! "statusline.right" (list-ref *zen-saved-statusline* 2)))
   (update-configuration!))
 
 ;; --- public entry points ----------------------------------------------------
@@ -171,6 +204,7 @@
              (set! *zen-total* total)
              (zen-apply-pad! (zen-pad-for total))
              (when *zen-hide-gutters* (zen-hide-gutters!))
+             (when *zen-blank-statusline* (zen-hide-statusline!))
              (set! *zen-on?* #t)
              (zen-start-polling!)
              (set-status! "zen on")]))])]))
@@ -182,6 +216,7 @@
   (set! *zen-total* #f)
   (set! *zen-pending-total* #f)
   (when *zen-hide-gutters* (zen-restore-gutters!))
+  (when *zen-blank-statusline* (zen-restore-statusline!))
   (set! *zen-on?* #f)
   (set-status! "zen off"))
 
