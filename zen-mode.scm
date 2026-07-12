@@ -133,26 +133,30 @@
 ;;@doc
 ;; Turn zen mode on
 (define (zen-on)
-  ;; re-check window state first: :wonly / :wclose typed at the prompt don't
-  ;; fire post-command, so the flag may be stale until we look at the width now.
-  (zen-refresh-window-state!)
   (cond
-    ;; zen only ever shows one window
-    [*zen-multi-window?*
-     (set-status! "zen-mode: close other windows first")]
+    [*zen-on?*
+     (set-status! "zen already on")]
     [else
-     ;; measured while unclipped (cur-pad is 0 here), so this is the true width
-     (let ([total (zen-measure-total)])
-       (cond
-         [(not total)
-          (set-status! "zen-mode: no focused buffer")]
-         [else
-          (set! *zen-total* total)
-          (zen-apply-pad! (zen-pad-for total))
-          (when *zen-hide-chrome* (zen-hide-chrome!))
-          (set! *zen-on?* #t)
-          (zen-start-polling!)
-          (set-status! "zen on")]))]))
+     ;; re-check window state first: :wonly / :wclose typed at the prompt don't
+     ;; fire post-command, so the flag may be stale until we look at the width now.
+     (zen-refresh-window-state!)
+     (cond
+       ;; zen only ever shows one window
+       [*zen-multi-window?*
+        (set-status! "zen-mode: close other windows first")]
+       [else
+        ;; measured while unclipped (cur-pad is 0 here), so this is the true width
+        (let ([total (zen-measure-total)])
+          (cond
+            [(not total)
+             (set-status! "zen-mode: no focused buffer")]
+            [else
+             (set! *zen-total* total)
+             (zen-apply-pad! (zen-pad-for total))
+             (when *zen-hide-chrome* (zen-hide-chrome!))
+             (set! *zen-on?* #t)
+             (zen-start-polling!)
+             (set-status! "zen on")]))])]))
 
 ;;@doc
 ;; Turn zen mode off
