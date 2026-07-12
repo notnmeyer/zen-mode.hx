@@ -1,0 +1,72 @@
+[env]
+# where Steel installs cogs, and the name this package installs under (from cog.scm)
+COG_NAME = "zen-mode"
+COG_DIR = "{{env.HOME}}/.local/share/steel/cogs/zen-mode"
+HELIX_INIT = "{{env.HOME}}/.config/helix/init.scm"
+
+[tasks.install]
+description = "Install this package into the Steel cog directory via forge"
+run = "forge install {{config_root}}"
+
+[tasks.link]
+description = "Dev install: symlink the cog dir to this repo so edits apply without reinstalling"
+run = '''
+set -e
+if [ -L "$COG_DIR" ] || [ -e "$COG_DIR" ]; then
+  rm -rf "$COG_DIR"
+fi
+ln -s "{{config_root}}" "$COG_DIR"
+echo "linked $COG_DIR -> {{config_root}}"
+'''
+
+[tasks.unlink]
+description = "Remove the dev symlink (does not touch a real forge install)"
+run = '''
+if [ -L "$COG_DIR" ]; then
+  rm "$COG_DIR"
+  echo "removed symlink $COG_DIR"
+else
+  echo "no symlink at $COG_DIR (nothing to do)"
+fi
+'''
+
+[tasks.uninstall]
+description = "Remove the installed cog entirely"
+run = '''
+rm -rf "$COG_DIR"
+echo "removed $COG_DIR"
+'''
+
+[tasks.require]
+description = "Add the (require ...) line to helix init.scm if it isn't already there"
+run = '''
+set -e
+line='(require "zen-mode/zen-mode.scm")'
+touch "$HELIX_INIT"
+if grep -qF "$line" "$HELIX_INIT"; then
+  echo "already required in $HELIX_INIT"
+else
+  printf '%s\n' "$line" >> "$HELIX_INIT"
+  echo "added require to $HELIX_INIT"
+fi
+'''
+
+[tasks.setup]
+description = "Full local setup: install the cog and add the require to init.scm"
+depends = ["install", "require"]
+
+[tasks.status]
+description = "Show install state: cog dir, whether it's a symlink, and the init require"
+run = '''
+echo "cog dir: $COG_DIR"
+if [ -L "$COG_DIR" ]; then
+  echo "  -> symlink to $(readlink "$COG_DIR")"
+elif [ -d "$COG_DIR" ]; then
+  echo "  -> installed (forge copy)"
+  ls -1 "$COG_DIR"
+else
+  echo "  -> not installed"
+fi
+echo "init.scm require:"
+grep -nF 'zen-mode/zen-mode.scm' "$HELIX_INIT" 2>/dev/null || echo "  (not present)"
+'''
