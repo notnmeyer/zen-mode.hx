@@ -264,8 +264,12 @@
 ;; the width-based clear is needed because `:wonly`/`:wclose` typed at the prompt
 ;; don't fire the post-command hook (only their keybound static forms do), so we
 ;; can't rely on catching the close command by name.
+;; both spellings on purpose: keybound static commands report underscore names
+;; (vsplit_new), but the same command typed at the prompt reports the typable
+;; name, which is hyphenated for the -new variants (:vsplit-new / :vnew).
 (define *zen-split-commands*
-  (list "vsplit" "vsplit_new" "hsplit" "hsplit_new"
+  (list "vsplit" "vsplit_new" "vsplit-new"
+        "hsplit" "hsplit_new" "hsplit-new"
         "goto_file_vsplit" "goto_file_hsplit"))
 
 (define (zen-split-command? name)
