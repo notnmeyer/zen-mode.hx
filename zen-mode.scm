@@ -222,19 +222,26 @@
 ;; newest ticker keeps looping.
 (define *zen-poll-gen* 0)
 
+;; the delay must reach enqueue-thread-local-callback-with-delay as an exact
+;; integer: its rust side does `delay.int_or_else(|| panic!(..))` and a float
+;; panics the whole editor. floor whatever the tunable is set to (a fraction is
+;; a config mistake, not a sub-ms poll) so a stray 0.5 can't crash helix.
+(define (zen-poll-delay)
+  (inexact->exact (floor *zen-poll-ms*)))
+
 (define (zen-poll-tick my-gen)
   (when (and *zen-on?* (= my-gen *zen-poll-gen*))
     (zen-reapply!)
     (enqueue-thread-local-callback-with-delay
-     *zen-poll-ms*
+     (zen-poll-delay)
      (lambda () (zen-poll-tick my-gen)))))
 
 (define (zen-start-polling!)
-  (when (> *zen-poll-ms* 0)
+  (when (> (zen-poll-delay) 0)
     (set! *zen-poll-gen* (+ *zen-poll-gen* 1))
     (let ([my-gen *zen-poll-gen*])
       (enqueue-thread-local-callback-with-delay
-       *zen-poll-ms*
+       (zen-poll-delay)
        (lambda () (zen-poll-tick my-gen))))))
 
 ;; --- single-window enforcement ----------------------------------------------
