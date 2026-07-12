@@ -281,6 +281,10 @@
 ;; both spellings on purpose: keybound static commands report underscore names
 ;; (vsplit_new), but the same command typed at the prompt reports the typable
 ;; name, which is hyphenated for the -new variants (:vsplit-new / :vnew).
+;;
+;; goto_file_*split fire their name even when no file opens (the path under the
+;; cursor didn't resolve), so those can turn zen off with no split having opened.
+;; harmless — just re-toggle — and unavoidable without a real view-count api.
 (define *zen-split-commands*
   (list "vsplit" "vsplit_new" "vsplit-new"
         "hsplit" "hsplit_new" "hsplit-new"
