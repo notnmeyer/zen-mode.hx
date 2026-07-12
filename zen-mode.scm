@@ -24,8 +24,8 @@
 ;;                        size, so padding is always visible)
 ;;   * a number >= 1   -> an absolute column count
 (define *zen-width* 0.65)
-;; whether to also hide gutters + statusline while zen is on
-(define *zen-hide-chrome* #t)
+;; whether to hide the gutters while zen is on
+(define *zen-hide-gutters* #t)
 ;; how often (ms) to poll for terminal resizes while zen is on, so centering
 ;; follows a window resize without waiting for a keypress. 0 disables polling
 ;; (resizes then only re-center on the next command).
@@ -111,7 +111,7 @@
   (set-editor-clip-right! pad)
   (set! *zen-cur-pad* pad))
 
-;; --- chrome hide / restore --------------------------------------------------
+;; --- gutter hide / restore --------------------------------------------------
 ;;
 ;; We hide the gutters while zen is on. Setting gutters uses the generic
 ;; serde-based `set-option!` (the typed `gutters` config setter takes an opaque
@@ -132,14 +132,14 @@
 ;; theme API can't restore the original theme and corrupts other scopes). So we
 ;; keep it fully functional in zen mode.
 
-(define (zen-hide-chrome!)
+(define (zen-hide-gutters!)
   (let ([g (get-config-option-value "gutters")])
     (set! *zen-saved-gutters* (and (hash? g) (hash-try-get g 'layout))))
   ;; empty gutter layout -> no gutters
   (set-option! "gutters" '())
   (update-configuration!))
 
-(define (zen-restore-chrome!)
+(define (zen-restore-gutters!)
   ;; restore gutters from the saved layout list (falls back to nothing if unset)
   (when (list? *zen-saved-gutters*)
     (set-option! "gutters" *zen-saved-gutters*))
@@ -170,7 +170,7 @@
             [else
              (set! *zen-total* total)
              (zen-apply-pad! (zen-pad-for total))
-             (when *zen-hide-chrome* (zen-hide-chrome!))
+             (when *zen-hide-gutters* (zen-hide-gutters!))
              (set! *zen-on?* #t)
              (zen-start-polling!)
              (set-status! "zen on")]))])]))
@@ -181,7 +181,7 @@
   (zen-apply-pad! 0)
   (set! *zen-total* #f)
   (set! *zen-pending-total* #f)
-  (when *zen-hide-chrome* (zen-restore-chrome!))
+  (when *zen-hide-gutters* (zen-restore-gutters!))
   (set! *zen-on?* #f)
   (set-status! "zen off"))
 
