@@ -36,12 +36,16 @@
 (define *zen-on?* #f)
 ;; best-effort "more than one window is open" flag. the engine exposes no view
 ;; count, so we infer it (see the post-command hook): a split command sets it,
-;; and it clears when the focused view's width returns to the full single-window
-;; width. used to refuse turning zen on while split.
+;; and it clears when the focused view returns to the full single-window size.
+;; used to refuse turning zen on while split.
 (define *zen-multi-window?* #f)
-;; the focused view width observed while single-window and unclipped; the
+;; the focused view width/height observed while single-window and unclipped; the
 ;; reference used to notice when we're back to one window after a split closes.
+;; we track BOTH dims: a vsplit shrinks width, an hsplit shrinks height, so width
+;; alone can't tell an hsplit from a single window (each hsplit child keeps the
+;; full width). only when both are back at the reference are we truly single.
 (define *zen-full-width* #f)
+(define *zen-full-height* #f)
 ;; per-side padding currently applied
 (define *zen-cur-pad* 0)
 ;; the true total editor width, captured while unclipped. this is the source of
@@ -61,17 +65,27 @@
   (let ([area (editor-focused-buffer-area)])
     (and area (area-width area))))
 
-;; keep our best-effort window-state view current from the focused width:
-;;   * single-window & unclipped -> record the reference full width
-;;   * multi-window & width back at the reference -> we're single again
-;; safe to call anytime; only reads width and updates the two flags.
+;; focused view's height, or #f if there's no focused buffer
+(define (zen-inner-height)
+  (let ([area (editor-focused-buffer-area)])
+    (and area (area-height area))))
+
+;; keep our best-effort window-state view current from the focused view size:
+;;   * single-window & unclipped -> record the reference full width + height
+;;   * multi-window & both dims back at the reference -> we're single again
+;; safe to call anytime; only reads size and updates the two flags. requiring
+;; both dims is what catches hsplit recovery: an hsplit keeps full width, so a
+;; width-only check would falsely clear the flag while the hsplit is still open.
 (define (zen-refresh-window-state!)
-  (let ([w (zen-inner-width)])
-    (when w
+  (let ([w (zen-inner-width)]
+        [h (zen-inner-height)])
+    (when (and w h)
       (cond
         [(and (not *zen-multi-window?*) (= *zen-cur-pad* 0))
-         (set! *zen-full-width* w)]
-        [(and *zen-multi-window?* *zen-full-width* (>= w *zen-full-width*))
+         (set! *zen-full-width* w)
+         (set! *zen-full-height* h)]
+        [(and *zen-multi-window?* *zen-full-width* *zen-full-height*
+              (>= w *zen-full-width*) (>= h *zen-full-height*))
          (set! *zen-multi-window?* #f)]))))
 
 ;; the true total width, only trustworthy when no clip is applied (cur-pad = 0),
@@ -288,6 +302,21 @@
                    [else (zen-refresh-window-state!)])
                  ;; keep centering in sync when zen is on
                  (when *zen-on?* (zen-reapply!))))
+
+;; --- window baseline seed ---------------------------------------------------
+
+;; seed the single-window reference size once at load. a fresh helix always
+;; starts with one view, so this captures a valid full-size baseline before any
+;; command runs. without it, if a split is the very first command, the reference
+;; is still #f when the split sets *zen-multi-window?* — and since the recording
+;; branch is gated on (not multi) and the recovery branch needs a non-#f
+;; reference, both would be stuck and zen could never turn on again that session.
+;; deferred (like the keybinding) so the editor is fully laid out when we read.
+(define (zen-seed-window-baseline!)
+  (when (and (not *zen-full-width*) (= *zen-cur-pad* 0))
+    (zen-refresh-window-state!)))
+
+(enqueue-thread-local-callback zen-seed-window-baseline!)
 
 ;; --- keybinding -------------------------------------------------------------
 
