@@ -35,14 +35,15 @@ tunables at the top of `zen-mode.scm`:
 | variable | default | meaning |
 |---|---|---|
 | `*zen-width*` | `0.65` | content width when zen is on. a fraction `< 1` is a proportion of the terminal width (scales at every size); a number `>= 1` is an absolute column count. |
-| `*zen-hide-chrome*` | `#t` | also hide the gutters while zen is on. set to `#f` for centering only. |
-| `*zen-poll-ms*` | `120` | how often (ms) to poll for terminal resizes while zen is on, so centering follows a resize live. `0` disables polling (resizes then only re-center on the next keypress). |
+| `*zen-hide-gutters*` | `#t` | hide the gutters while zen is on. set to `#f` for centering only. |
+| `*zen-blank-statusline*` | `#f` | empty the statusline while zen is on. the row can't be removed (it's structural), so this leaves a bare bar in the statusline theme color, not a hidden row. |
+| `*zen-poll-ms*` | `120` | how often (ms) to poll for terminal resizes while zen is on, so centering follows a resize live. `0` disables polling (resizes then only re-center on the next keypress). must be a whole number. |
 
 padding is `(total_width - content_width) / 2` per side. with the default `0.65`, content is always 65% of the terminal width, so centering is visible at every size (mirrors zen-mode.nvim's `width = 0.65`). set `*zen-width*` to e.g. `120` to pin an absolute column width — on narrower terminals content just fills the width with no padding.
 
 ## notes
 
-- **single window only.** zen mode always shows exactly one window. opening a split (`vsplit`/`hsplit`/`goto_file_vsplit`) while zen is on turns it off automatically, and you can't turn zen on while a split is open — close the other windows first. the engine exposes no view count, so window state is inferred from command names plus focused view width; the common split/close paths are covered.
-- **statusline stays visible.** it's a structural row that can't be removed via the clip or config api (blanking it leaves an empty bar, and recoloring it to blend in isn't possible cleanly through the steel theme api), so zen leaves it functional.
+- **single window only.** zen mode always shows exactly one window. opening a split (`vsplit`/`hsplit`/`goto_file_vsplit`) while zen is on turns it off automatically, and you can't turn zen on while a split is open — close the other windows first. the engine exposes no view count, so window state is inferred from command names plus the focused view's width and height; the common split/close paths are covered.
+- **statusline.** by default zen leaves the statusline functional — it's a structural row that can't be removed via the clip or config api. set `*zen-blank-statusline*` to empty its content, which leaves a bare bar in the statusline theme color (recoloring it to blend in isn't possible cleanly through the steel theme api).
 - **resize.** there's no window-resize hook, so a timer polls every `*zen-poll-ms*` and re-centers without a keypress. it settles ~2 ticks after a resize (a debounce that avoids clipping to a half-drawn frame).
 - **gutters restore.** only the gutter *layout* is saved/restored; custom `line-numbers` options revert to defaults after a toggle cycle.
