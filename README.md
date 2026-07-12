@@ -35,11 +35,12 @@ tunables at the top of `zen-mode.scm`:
 | variable | default | meaning |
 |---|---|---|
 | `*zen-width*` | `0.65` | content width when zen is on. a fraction `< 1` is a proportion of the terminal width (scales at every size); a number `>= 1` is an absolute column count. |
+| `*zen-max-width*` | `120` | hard cap on the content band, in columns. keeps a fractional `*zen-width*` from growing the band past this on wide screens, so text stays visually centered instead of hugging the left edge of a too-wide band. set to `#f` to disable the cap. |
 | `*zen-hide-gutters*` | `#t` | hide the gutters while zen is on. set to `#f` for centering only. |
 | `*zen-blank-statusline*` | `#f` | empty the statusline while zen is on. the row can't be removed (it's structural), so this leaves a bare bar in the statusline theme color, not a hidden row. |
 | `*zen-poll-ms*` | `120` | how often (ms) to poll for terminal resizes while zen is on, so centering follows a resize live. `0` disables polling (resizes then only re-center on the next keypress). must be a whole number. |
 
-padding is `(total_width - content_width) / 2` per side. with the default `0.65`, content is always 65% of the terminal width, so centering is visible at every size (mirrors zen-mode.nvim's `width = 0.65`). set `*zen-width*` to e.g. `120` to pin an absolute column width — on narrower terminals content just fills the width with no padding.
+padding is `(total_width - content_width) / 2` per side. with the default `0.65`, content is 65% of the terminal width, so centering is visible at every size (mirrors zen-mode.nvim's `width = 0.65`) — but `*zen-max-width*` caps the band at `120` cols, so past ~185 cols wide the band holds and the padding keeps growing evenly. that keeps the text centered on wide screens instead of hugging the left edge of an ever-widening band. set `*zen-max-width*` to `#f` for the pure fraction, or set `*zen-width*` to e.g. `120` to pin an absolute column width directly.
 
 ## notes
 

@@ -24,6 +24,14 @@
 ;;                        size, so padding is always visible)
 ;;   * a number >= 1   -> an absolute column count
 (define *zen-width* 0.65)
+;; hard cap on the content band, in columns. the fraction above keeps growing the
+;; band on wide screens, but real lines are ~80 cols, so past a point the extra
+;; width is just empty space to the right of the text — the band stays centered
+;; but the text hugs its left edge and reads as left-shifted. capping the band
+;; stops that: once the fraction would exceed this, the band holds here and the
+;; padding keeps growing evenly, so the text stays visually centered. set to #f
+;; to disable the cap (pure fraction, old behavior).
+(define *zen-max-width* 120)
 ;; whether to hide the gutters while zen is on
 (define *zen-hide-gutters* #t)
 ;; whether to blank the statusline while zen is on. the statusline row can't be
@@ -102,13 +110,17 @@
   (and (= *zen-cur-pad* 0) (zen-inner-width)))
 
 ;; desired content width in columns for a given total width, resolving
-;; *zen-width* as a fraction (< 1) or an absolute column count (>= 1). always
-;; clamped to the available width.
+;; *zen-width* as a fraction (< 1) or an absolute column count (>= 1), then
+;; capping at *zen-max-width* (if set) so the band stops growing on wide screens.
+;; always clamped to the available width.
 (define (zen-content-width total)
-  (let ([w (if (< *zen-width* 1)
-               (inexact->exact (floor (* total *zen-width*)))
-               (inexact->exact (floor *zen-width*)))])
-    (min total (max 1 w))))
+  (let* ([w (if (< *zen-width* 1)
+                (inexact->exact (floor (* total *zen-width*)))
+                (inexact->exact (floor *zen-width*)))]
+         [capped (if (and *zen-max-width* (> w *zen-max-width*))
+                     (inexact->exact (floor *zen-max-width*))
+                     w)])
+    (min total (max 1 capped))))
 
 ;; per-side padding for a given total width. never returns negative.
 (define (zen-pad-for total)
