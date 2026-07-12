@@ -121,7 +121,10 @@
 ;; We save only the gutter `layout` list (an array of names): the full struct
 ;; round-trips badly because line-numbers.min-width comes back as a float (3.0)
 ;; that won't deserialize into a usize. The layout array restores the visible
-;; gutters, which is what matters here.
+;; gutters, which is what matters here. Side effect: because only the layout is
+;; restored, a toggle cycle resets any custom line-numbers.min-width back to the
+;; default (3) — restoring it would need an int through the same setter the float
+;; round-trip rules out.
 ;;
 ;; The statusline is intentionally left alone. It's a structural row that can't
 ;; be removed via the clip or config API — blanking its content just leaves an
