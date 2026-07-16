@@ -13,7 +13,9 @@
 (require "helix/configuration.scm")
 (require "helix/keymaps.scm")
 (require "helix/misc.scm")
-(require "helix/components.scm") ;; area-width
+(require "helix/components.scm") ;; area-width, theme-scope, style bg helpers
+(require "helix/themes.scm")     ;; current-theme, theme-set-style!, theme-set-name!, register-theme
+(require "helix/commands.scm")   ;; (theme "name") — the typable theme-activation command
 
 (provide zen-mode zen-on zen-off)
 
@@ -33,12 +35,19 @@
 ;; to disable the cap (pure fraction, old behavior).
 (define *zen-max-width* 120)
 ;; whether to hide the gutters while zen is on
-(define *zen-hide-gutters* #t)
+(define *zen-hide-gutters* #f)
 ;; whether to blank the statusline while zen is on. the statusline row can't be
 ;; removed (it's structural), so this empties its content — you get a bare bar in
 ;; the statusline theme color, not a hidden row. off by default: a functional
 ;; statusline is usually worth the one row.
-(define *zen-blank-statusline* #f)
+(define *zen-blank-statusline* #t)
+;; whether to recolor the statusline bar to match the editor background while zen
+;; is on ("blend"). independent from blanking: blank controls the statusline's
+;; content, blend its bar color. recolors ui.statusline + ui.statusline.inactive
+;; (the bar bg) to ui.background's bg. element-specific colors (e.g. the mode
+;; indicator) carry their own bg and stay visible — blank them with the lever
+;; above. needs the theme-set-name! binding from the steel-enabled fork.
+(define *zen-blend-statusline* #t)
 ;; how often (ms) to poll for terminal resizes while zen is on, so centering
 ;; follows a window resize without waiting for a keypress. 0 disables polling
 ;; (resizes then only re-center on the next command).
@@ -73,6 +82,9 @@
 ;; original statusline element lists (left . (center . right)), captured on
 ;; toggle-on so we can restore them when blanking is enabled
 (define *zen-saved-statusline* #f)
+;; name of the theme active when blend turned on, so we can reactivate it (fresh
+;; from disk, palette + inherits intact) on toggle-off. #f when blend isn't active.
+(define *zen-saved-theme-name* #f)
 
 ;; --- helpers ----------------------------------------------------------------
 
@@ -146,13 +158,15 @@
 ;; default (3) — restoring it would need an int through the same setter the float
 ;; round-trip rules out.
 ;;
-;; The statusline can't be removed — it's a structural row (the view reserves it
-;; via clip_bottom(1)) with no config toggle, and it's always painted in the
-;; ui.statusline theme style. The most we can do is empty its content, leaving a
-;; bare bar in that color. *zen-blank-statusline* opts into that; off by default,
-;; the statusline stays functional. We can't recolor it to blend into the theme
-;; background: the Steel theme API can't restore the original theme afterward and
-;; corrupts other scopes.
+;; The statusline row can't be removed — it's structural (the view reserves it via
+;; clip_bottom(1)) with no config toggle, and always painted in the ui.statusline
+;; style. So the row always holds its line; text still stops one short. Two
+;; independent levers make it *look* absent, and compose:
+;;   * *zen-blank-statusline* empties its content (the three element lists), so no
+;;     text renders — a bare bar in the ui.statusline color remains.
+;;   * *zen-blend-statusline* recolors that bar to the editor background, so the
+;;     bar itself becomes invisible (see the blend section below).
+;; With both on, the row disappears entirely into the background.
 ;;
 ;; Blanking saves and clears the three element lists (left/center/right). These
 ;; round-trip fine — StatusLineElement is a kebab-case string enum, same shape as
@@ -190,6 +204,49 @@
     (set-option! "statusline.right" (list-ref *zen-saved-statusline* 2)))
   (update-configuration!))
 
+;; --- statusline blend (recolor bar to background) ---------------------------
+;;
+;; Helix has no live per-scope theme setter — a scope's color only changes by
+;; swapping the whole active theme. So blend clones the current theme, recolors
+;; the statusline scopes, registers the clone under a distinct name, and activates
+;; it; toggle-off reactivates the saved original name, reloading it fresh from disk
+;; (palette + inherits intact).
+;;
+;; The name must be distinct from any on-disk theme: the loader resolves names
+;; disk-first and only falls back to dynamic themes, so a clone sharing the disk
+;; theme's name would never load. Reusing the original name isn't an option.
+(define *zen-blend-theme-name* "zen-blend")
+
+;; the background Color of the current theme, or #f if ui.background sets no bg
+(define (zen-background-color)
+  (style->bg (theme-scope "ui.background")))
+
+(define (zen-blend-statusline!)
+  (let ([bg (zen-background-color)])
+    ;; no readable background bg -> can't blend; leave the statusline as-is
+    (when bg
+      (set! *zen-saved-theme-name* (current-theme-name))
+      ;; bind the clone as `t`, not `theme`: `theme` is the typable command used
+      ;; below to activate the result, so shadowing it here would break activation.
+      (let ([t (current-theme)])
+        ;; recolor both the focused and inactive bar to the editor background,
+        ;; preserving each scope's fg so any surviving text stays legible
+        (for-each
+         (lambda (scope)
+           (let ([style (theme-style t scope)])
+             (set-style-bg! style bg)
+             (theme-set-style! t scope style)))
+         '("ui.statusline" "ui.statusline.inactive"))
+        (theme-set-name! t *zen-blend-theme-name*)
+        (register-theme t)
+        (theme *zen-blend-theme-name*)))))
+
+(define (zen-unblend-statusline!)
+  ;; reactivate the theme that was live before blend (reloads fresh from disk)
+  (when *zen-saved-theme-name*
+    (theme *zen-saved-theme-name*)
+    (set! *zen-saved-theme-name* #f)))
+
 ;; --- public entry points ----------------------------------------------------
 
 ;;@doc
@@ -217,6 +274,7 @@
              (zen-apply-pad! (zen-pad-for total))
              (when *zen-hide-gutters* (zen-hide-gutters!))
              (when *zen-blank-statusline* (zen-hide-statusline!))
+             (when *zen-blend-statusline* (zen-blend-statusline!))
              (set! *zen-on?* #t)
              (zen-start-polling!)
              (set-status! "zen on")]))])]))
@@ -229,6 +287,9 @@
   (set! *zen-pending-total* #f)
   (when *zen-hide-gutters* (zen-restore-gutters!))
   (when *zen-blank-statusline* (zen-restore-statusline!))
+  ;; unblend from the saved name, not the tunable: if blend was toggled off while
+  ;; zen was on, *zen-saved-theme-name* still holds the theme to restore.
+  (when *zen-saved-theme-name* (zen-unblend-statusline!))
   (set! *zen-on?* #f)
   (set-status! "zen off"))
 
